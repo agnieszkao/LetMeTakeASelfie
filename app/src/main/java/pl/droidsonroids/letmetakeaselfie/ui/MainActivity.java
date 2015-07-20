@@ -1,7 +1,11 @@
 package pl.droidsonroids.letmetakeaselfie.ui;
 
 import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Matrix;
 import android.graphics.Rect;
+import android.media.ExifInterface;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
@@ -15,6 +19,9 @@ import android.view.View;
 import android.widget.Toast;
 
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.util.Date;
 
 import butterknife.Bind;
 import butterknife.ButterKnife;
@@ -38,9 +45,8 @@ public class MainActivity extends AppCompatActivity implements UserNameDialogFra
     RecyclerView recyclerView;
     private SelfieAdapter selfieAdapter;
     private static final String KEY_FILEPATH = "filepath";
-    private static final String FILEPATH = "mypicture.jpeg";
     private static final int TAKE_PICTURE = 0;
-    private boolean flag = false;
+    private boolean flagOk = false;
     private String inState;
 
 
@@ -63,7 +69,7 @@ public class MainActivity extends AppCompatActivity implements UserNameDialogFra
     @Override
     protected void onResume() {
         super.onResume();
-        if (flag) {
+        if (flagOk) {
             new UserNameDialogFragment().show(getSupportFragmentManager(), null);
         }
     }
@@ -122,14 +128,16 @@ public class MainActivity extends AppCompatActivity implements UserNameDialogFra
     @Override
     protected void onActivityResult(final int requestCode, final int resultCode, final Intent data) {
         if (requestCode == TAKE_PICTURE && resultCode == RESULT_OK) {
-            flag = true;
+            exifRotate();
+            flagOk = true;
         }
     }
 
     private void openCamera() {
         Intent cameraIntent = new Intent("android.media.action.IMAGE_CAPTURE");
         if (cameraIntent.resolveActivity(getPackageManager()) != null) {
-            inState = FILEPATH;
+            String filepath = new Date().toString() + ".jpeg";
+            inState = filepath;
             File file = new File(Environment.getExternalStorageDirectory(), inState);
             cameraIntent.putExtra(MediaStore.EXTRA_OUTPUT, Uri.fromFile(file));
             startActivityForResult(cameraIntent, TAKE_PICTURE);
@@ -168,5 +176,58 @@ public class MainActivity extends AppCompatActivity implements UserNameDialogFra
                 Toast.makeText(MainActivity.this, R.string.selfie_upload_error, Toast.LENGTH_SHORT).show();
             }
         });
+    }
+
+    private void exifRotate() {
+        ExifInterface exif = null;
+        File file = new File(Environment.getExternalStorageDirectory(), inState);
+        String path = file.getPath();
+        try {
+            exif = new ExifInterface(path);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        if (exif != null) {
+            int orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION,
+                    ExifInterface.ORIENTATION_UNDEFINED);
+            Bitmap picture = BitmapFactory.decodeFile(path);
+            picture = rotatePicture(picture, orientation);
+            try {
+                FileOutputStream fileOutputStream = new FileOutputStream(file);
+                if (picture != null) {
+                    picture.compress(Bitmap.CompressFormat.JPEG, 100, fileOutputStream);
+                }
+                fileOutputStream.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private Bitmap rotatePicture(Bitmap picture, int orientation) {
+        Matrix matrix = new Matrix();
+        switch (orientation) {
+            case ExifInterface.ORIENTATION_NORMAL:
+                return picture;
+            case ExifInterface.ORIENTATION_ROTATE_90:
+                matrix.setRotate(90);
+                break;
+            case ExifInterface.ORIENTATION_ROTATE_180:
+                matrix.setRotate(180);
+                break;
+            case ExifInterface.ORIENTATION_ROTATE_270:
+                matrix.setRotate(-90);
+                break;
+            default:
+                return picture;
+        }
+        try {
+            Bitmap pictureRotated = Bitmap.createBitmap(picture, 0, 0, picture.getWidth(), picture.getHeight(), matrix, true);
+            picture.recycle();
+            return pictureRotated;
+        } catch (OutOfMemoryError e) {
+            e.printStackTrace();
+            return null;
+        }
     }
 }
