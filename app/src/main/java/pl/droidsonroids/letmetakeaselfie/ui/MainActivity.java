@@ -46,7 +46,7 @@ public class MainActivity extends AppCompatActivity implements UserNameDialogFra
     private SelfieAdapter selfieAdapter;
     private static final String KEY_FILEPATH = "filepath";
     private static final int TAKE_PICTURE = 0;
-    private boolean flagOk = false;
+    private boolean wasPictureTaken = false;
     private String inState;
 
 
@@ -69,9 +69,10 @@ public class MainActivity extends AppCompatActivity implements UserNameDialogFra
     @Override
     protected void onResume() {
         super.onResume();
-        if (flagOk) {
+        if (wasPictureTaken) {
             new UserNameDialogFragment().show(getSupportFragmentManager(), null);
         }
+        wasPictureTaken = false;
     }
 
     private void initSelfieAdapter() {
@@ -129,18 +130,19 @@ public class MainActivity extends AppCompatActivity implements UserNameDialogFra
     protected void onActivityResult(final int requestCode, final int resultCode, final Intent data) {
         if (requestCode == TAKE_PICTURE && resultCode == RESULT_OK) {
             exifRotate();
-            flagOk = true;
+            wasPictureTaken = true;
         }
     }
 
     private void openCamera() {
-        Intent cameraIntent = new Intent("android.media.action.IMAGE_CAPTURE");
+        Intent cameraIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
         if (cameraIntent.resolveActivity(getPackageManager()) != null) {
-            String filepath = new Date().toString() + ".jpeg";
-            inState = filepath;
-            File file = new File(Environment.getExternalStorageDirectory(), inState);
-            cameraIntent.putExtra(MediaStore.EXTRA_OUTPUT, Uri.fromFile(file));
-            startActivityForResult(cameraIntent, TAKE_PICTURE);
+            inState = new Date().toString() + ".jpeg";
+            if (Environment.getExternalStorageState().equals(Environment.MEDIA_MOUNTED)) {
+                File file = new File(Environment.getExternalStorageDirectory(), inState);
+                cameraIntent.putExtra(MediaStore.EXTRA_OUTPUT, Uri.fromFile(file));
+                startActivityForResult(cameraIntent, TAKE_PICTURE);
+            }
         } else {
             Toast.makeText(getApplicationContext(), R.string.no_camera, Toast.LENGTH_SHORT).show();
         }
